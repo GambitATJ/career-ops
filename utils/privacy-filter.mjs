@@ -25,7 +25,7 @@ export const PLACEHOLDERS = Object.freeze({
   linkedin: 'linkedin.com/in/candidate',
   github: 'github.com/candidate',
   portfolio_url: 'candidate.example',
-  portfolio: 'candidate.example',
+  portfolio: 'candidate-portfolio.example',
   twitter: 'x.com/candidate',
 });
 
@@ -66,6 +66,18 @@ function cleanString(v) {
 
 function normalizeUrl(v) {
   return v.replace(/[?#].*$/, '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '');
+}
+
+// X and Twitter serve the same profile under two hosts: a profile configured as
+// x.com/<handle> must also match twitter.com/<handle>, and the other way round.
+// The lookbehind keeps a short host like "x.com" from matching inside "box.com".
+const X_HOST = /^(?:x|twitter)\.com(?=\/|$)/i;
+
+function urlPattern(normalized) {
+  if (X_HOST.test(normalized)) {
+    return `(?<![\\w.-])${URL_PREFIX}(?:x|twitter)\\.com${escapeRegex(normalized.replace(X_HOST, ''))}`;
+  }
+  return `${URL_PREFIX}${escapeRegex(normalized)}`;
 }
 
 /**
@@ -142,7 +154,7 @@ function buildRules(profileYmlText) {
       // Uses disjoint character classes for query chars vs trailing sentence punctuation
       // to avoid catastrophic / polynomial ReDoS (CodeQL js/polynomial-redos).
       find: new RegExp(
-        `${URL_PREFIX}${escapeRegex(normalizeUrl(url))}(?![\\w-])\\/?(?:[?#][^\\s)\\]>"'.,;:!?]+(?:[.,;:!?]+[^\\s)\\]>"'.,;:!?]+)*)?`,
+        `${urlPattern(normalizeUrl(url))}(?![\\w-])\\/?(?:[?#][^\\s)\\]>"'.,;:!?]+(?:[.,;:!?]+[^\\s)\\]>"'.,;:!?]+)*)?`,
         'gi'
       ),
     });
