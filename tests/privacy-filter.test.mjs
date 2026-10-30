@@ -146,8 +146,40 @@ privacy:
   check(!/janesmith\.dev|x\.com\/janesmith/.test(redPortfolio), 'portfolio and twitter URLs are redacted');
   check(redPortfolio.endsWith('.'), 'sentence punctuation after social URL is kept');
   const restoredPortfolio = restoreCandidatePII(redPortfolio, PROFILE_PORTFOLIO);
-  check(restoredPortfolio.includes('https://janesmith.dev') && restoredPortfolio.includes('https://x.com/janesmith'),
+  check(restoredPortfolio === 'Portfolio at https://janesmith.dev and https://janesmith.dev. Twitter: https://x.com/janesmith.',
     'portfolio and twitter URLs are restored correctly');
+
+  // X and Twitter are one profile under two hosts: either configured form matches both
+  const PROFILE_TWITTER_HOST = `
+candidate:
+  full_name: "Jane Smith"
+  twitter: "https://twitter.com/janesmith"
+privacy:
+  redact_contact_info: true
+`;
+  const cvBothHosts = 'X: https://x.com/janesmith | Twitter: twitter.com/janesmith | www.x.com/janesmith/';
+  for (const [label, prof] of [['x.com', PROFILE_PORTFOLIO], ['twitter.com', PROFILE_TWITTER_HOST]]) {
+    const out = redactCandidatePII(cvBothHosts, prof);
+    check(!/janesmith/i.test(out), `twitter configured on ${label} redacts both x.com and twitter.com URLs`);
+  }
+  check(redactCandidatePII('Files on box.com/janesmith', PROFILE_PORTFOLIO) === 'Files on box.com/janesmith',
+    'x.com does not match inside a longer host such as box.com');
+
+  // Two portfolio links: each gets its own placeholder and restores to its own URL
+  const PROFILE_TWO_PORTFOLIOS = `
+candidate:
+  full_name: "Jane Smith"
+  portfolio_url: "https://janesmith.dev"
+  portfolio: "https://behance.net/janesmith"
+privacy:
+  redact_contact_info: true
+`;
+  const cvTwoPortfolios = 'Site: https://janesmith.dev | Work: https://behance.net/janesmith';
+  const redTwoPortfolios = redactCandidatePII(cvTwoPortfolios, PROFILE_TWO_PORTFOLIOS);
+  check(PLACEHOLDERS.portfolio_url !== PLACEHOLDERS.portfolio, 'portfolio_url and portfolio use distinct placeholders');
+  check(!/janesmith/i.test(redTwoPortfolios), 'both portfolio links are redacted');
+  check(restoreCandidatePII(redTwoPortfolios, PROFILE_TWO_PORTFOLIOS) === cvTwoPortfolios,
+    'two-portfolio round trip restores each link in its own place');
 
   const EMPTY_URL = 'candidate:\n  full_name: "Jane Doe"\n  linkedin: "https://"\n  github: "www."\n';
   check(redactCandidatePII('Plain text with no profile links', EMPTY_URL) === 'Plain text with no profile links',
